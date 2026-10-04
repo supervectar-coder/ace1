@@ -1,0 +1,77 @@
+name: Actualizar lista AceStream
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/15 * * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  update-m3u:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Descargar M3U
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          URL="https://k51qzi5uqu5dh5qej4b9wlcr5i6vhc7rcfkekhrxqek5c9lk6gdaiik820fecs.ipns.inbrowser.link/hashes_acestream.m3u"
+
+          echo "Descargando: $URL"
+
+          curl \
+            --fail \
+            --location \
+            --silent \
+            --show-error \
+            --retry 5 \
+            --retry-delay 5 \
+            --connect-timeout 20 \
+            --max-time 120 \
+            -A "Mozilla/5.0 GitHub-Actions AceStream" \
+            "$URL" \
+            -o hashes_acestream.m3u
+
+          test -s hashes_acestream.m3u
+
+          echo "Tamaño:"
+          wc -c hashes_acestream.m3u
+
+          echo "Primeras líneas:"
+          head -n 10 hashes_acestream.m3u
+
+      - name: Validar M3U
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if grep -qE '#EXTM3U|#EXTINF|^[[:space:]]*(acestream://)?[A-Fa-f0-9]{40}[[:space:]]*$' hashes_acestream.m3u; then
+            echo "M3U válida."
+          else
+            echo "ERROR: la descarga no parece una lista M3U/AceStream."
+            exit 1
+          fi
+
+      - name: Guardar cambios
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add hashes_acestream.m3u
+
+          if git diff --cached --quiet; then
+            echo "La lista no ha cambiado."
+            exit 0
+          fi
+
+          git commit -m "Actualizar lista AceStream"
+          git push
