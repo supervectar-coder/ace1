@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SUPERVECTAR AceStream DEPORTES ELCANO</title>
+
+<style>
+
+body{
+  font-family:Arial,sans-serif;
+  background:#ffffff;
+  color:#000;
+  margin:0;
+  padding:0;
+}
+
+header{
+  background:#f5f5f5;
+  padding:10px;
+  text-align:center;
+  border-bottom:1px solid #ddd;
+}
+
+header h1{
+  margin:0;
+  font-size:1.5rem;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  color:#ff0000;
+}
+
+.header-logo{
+  width:40px;
+  height:40px;
+  object-fit:contain;
+}
+
+#searchInput{
+  width:90%;
+  max-width:400px;
+  padding:8px;
+  margin-top:10px;
+  border:1px solid #ccc;
+  border-radius:5px;
+  font-size:1rem;
+}
+
+.category-bar{
+  display:flex;
+  flex-wrap:wrap;
+  justify-content:center;
+  gap:8px;
+  padding:10px;
+  background:#f5f5f5;
+  border-bottom:1px solid #ddd;
+}
+
+.category-btn{
+  background:#e0e0e0;
+  color:#000;
+  border:none;
+  padding:8px 14px;
+  border-radius:20px;
+  cursor:pointer;
+  font-size:0.95rem;
+  transition:0.3s;
+}
+
+.category-btn.active{
+  background:#ff0000;
+  color:#fff;
+  transform:scale(1.05);
+}
+
+#notice{
+  text-align:center;
+  background:#ff0000;
+  color:#fff;
+  padding:10px;
+  font-size:0.95rem;
+  border-radius:5px;
+  margin:10px auto;
+  max-width:95%;
+}
+
+#notice a{
+  color:#fff;
+}
+
+h2.category-title{
+  background:#eeeeee;
+  padding:10px;
+  margin:0;
+  font-size:1.2rem;
+  border-top:2px solid #ddd;
+}
+
+ul{
+  list-style:none;
+  padding:0;
+  margin:0;
+}
+
+li{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  background:#ffffff;
+  padding:10px;
+  border-bottom:1px solid #ddd;
+}
+
+li:hover{
+  background:#f0f0f0;
+}
+
+.channel-info{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+}
+
+/* ✅ ÚNICO CAMBIO: FONDO NEGRO EN LOGOS */
+.channel-info img.logo{
+  width:80px;
+  height:45px;
+  object-fit:contain;
+  border-radius:6px;
+  background:#000;   /* ← aquí el cambio */
+  padding:4px;
+  border:1px solid #222;
+  box-shadow:0 1px 3px rgba(0,0,0,0.2);
+}
+
+.channel-info a{
+  color:#000;
+  text-decoration:none;
+  font-weight:bold;
+}
+
+.epg-now{
+  font-size:0.85rem;
+  color:#666;
+  margin-top:4px;
+}
+
+.epg-next{
+  font-size:0.78rem;
+  color:#999;
+}
+
+.progress-container{
+  width:100%;
+  max-width:250px;
+  height:4px;
+  background:#ddd;
+  border-radius:10px;
+  overflow:hidden;
+  margin-top:5px;
+}
+
+.progress-bar{
+  height:100%;
+  background:#ff0000;
+  width:0%;
+}
+
+.channel-actions{
+  display:flex;
+  gap:10px;
+}
+
+.play-btn{
+  background:#ff0000;
+  color:#fff;
+  border:none;
+  padding:5px 10px;
+  border-radius:5px;
+  cursor:pointer;
+  font-weight:bold;
+}
+
+.favorite-btn{
+  background:none;
+  border:none;
+  color:#888;
+  font-size:1.5rem;
+  cursor:pointer;
+}
+
+.favorite-btn.active{
+  color:#ff0000;
+}
+
+@media (max-width:600px){
+  li{
+    flex-direction:column;
+    align-items:flex-start;
+    gap:10px;
+  }
+
+  .channel-actions{
+    width:100%;
+    justify-content:flex-end;
+  }
+}
+
+</style>
+</head>
+
+<body>
+
+<header>
+
+<h1>
+<img src="https://i.ibb.co/7dGjZb80/6.jpg" class="header-logo">
+SUPERVECTAR AceStream DEPORTES ELCANO
+</h1>
+
+<input type="text" id="searchInput" placeholder="🔍 Buscar canal...">
+
+</header>
+
+<div id="notice">
+
+⚠️ Necesitas ACESTREAM instalado para reproducir.
+
+<a href="https://play.google.com/store/apps/details?id=org.acestream.node&hl=es" target="_blank">Android</a>
+|
+<a href="https://drive.google.com/file/d/1q997S8Niwa3g8hmjACZOaAOQ-OY-Fldl/view?usp=drive_link" target="_blank">Windows</a>
+
+</div>
+
+<div class="category-bar" id="categoryBar">
+<button class="category-btn active" data-category="all">Todos</button>
+<button class="category-btn" data-category="favorites">⭐ Favoritos</button>
+</div>
+
+<div id="channelContainer"></div>
+
+<script>
+
+const LISTA_URLS = [
+  "./hashes_acestream.m3u"
+];
+
+const EPG_URLS = [
+"https://www.tdtchannels.com/epg/TV.xml",
+"https://raw.githubusercontent.com/davidmuma/EPG_dobleM/master/guiatv.xml"
+];
+
+const EPG_MAP = {
+"LA LIGA TV":"LaLigaTV.es",
+"MOVISTAR PLUS":"MPLUS.es",
+"DAZN 1":"DAZN1.es",
+"DAZN 2":"DAZN2.es",
+"DAZN F1":"DAZNF1.es",
+"DAZN LA LIGA":"DAZNLaLiga.es",
+};
+
+const channelContainer = document.getElementById('channelContainer');
+const searchInput = document.getElementById('searchInput');
+const categoryBar = document.getElementById('categoryBar');
+
+let channels = [];
+let categories = [];
+let activeCategory = 'all';
+let epgData = {};
+
+async function loadEPG(){
+  for(const url of EPG_URLS){
+    try{
+      const response = await fetch(url, {cache:"no-store"});
+      if(!response.ok) throw new Error(`HTTP ${response.status}`);
+
+      const xmlText = await response.text();
+      const parser = new DOMParser();
+      const xml = parser.parseFromString(xmlText,"text/xml");
+
+      if(xml.querySelector("parsererror")){
+        throw new Error("XML EPG inválido");
+      }
+
+      const programmes = xml.querySelectorAll("programme");
+
+      programmes.forEach(p=>{
+        const channel = p.getAttribute("channel");
+        const title = p.querySelector("title")?.textContent || "";
+        const start = p.getAttribute("start");
+        const stop = p.getAttribute("stop");
+
+        if(!channel) return;
+
+        if(!epgData[channel]) epgData[channel] = [];
+
+        epgData[channel].push({
+          title,
+          start,
+          stop
+        });
+      });
+
+      renderChannels();
+
+    }catch(err){
+      console.error("Error EPG:", url, err);
+    }
+  }
+}
+
+function showMessage(message, type="error"){
+  const old = document.getElementById("loadMessage");
+  if(old) old.remove();
+
+  const box = document.createElement("div");
+  box.id = "loadMessage";
+  box.style.cssText = `
+    margin:10px auto;
+    max-width:95%;
+    padding:12px;
+    border-radius:6px;
+    text-align:center;
+    font-weight:bold;
+    background:${type==="error" ? "#ffe5e5" : "#e8f5e9"};
+    color:${type==="error" ? "#b00000" : "#176b22"};
+    border:1px solid ${type==="error" ? "#ffb3b3" : "#a5d6a7"};
+  `;
+  box.innerHTML = message;
+  channelContainer.before(box);
+}
+
+function parseM3U(text){
+  text = text.replace(/^\uFEFF/, "").replace(/\r/g, "");
+
+  const lines = text
+    .split("\n")
+    .map(line => line.trim())
+    .filter(Boolean);
+
+  const result = [];
+
+  // Standard M3U / EXTINF
+  for(let i=0; i<lines.length; i++){
+    const line = lines[i];
+
+    if(!line.startsWith("#EXTINF")) continue;
+
+    const info = line.substring(8);
+    const comma = info.lastIndexOf(",");
+    const name = comma >= 0 ? info.substring(comma + 1).trim() : "Canal";
+
+    let logo = "";
+    let category = "Otros";
+    let tvgId = "";
+
+    const logoMatch = info.match(/tvg-logo\s*=\s*"([^"]*)"/i);
+    if(logoMatch) logo = logoMatch[1];
+
+    const categoryMatch = info.match(/group-title\s*=\s*"([^"]*)"/i);
+    if(categoryMatch && categoryMatch[1].trim()){
+      category = categoryMatch[1].trim();
+    }
+
+    const idMatch = info.match(/tvg-id\s*=\s*"([^"]*)"/i);
+    if(idMatch) tvgId = idMatch[1];
+
+    if(!tvgId){
+      const upperName = name.toUpperCase();
+
+      Object.keys(EPG_MAP).forEach(key=>{
+        if(upperName.includes(key)){
+          tvgId = EPG_MAP[key];
+        }
+      });
+    }
+
+    let url = "";
+    for(let j=i+1; j<lines.length; j++){
+      if(!lines[j].startsWith("#")){
+        url = lines[j];
+        i = j;
+        break;
+      }
+    }
+
+    if(url){
+      result.push({name, logo, category, url, tvgId});
+    }
+  }
+
+  // Fallback: plain AceStream hash list.
+  // If no EXTINF channels were found, every 40-hex-character hash
+  // becomes an AceStream channel.
+  if(result.length === 0){
+    const seen = new Set();
+
+    for(const raw of lines){
+      const value = raw.replace(/^acestream:\/\//i, "").trim();
+
+      if(/^[a-f0-9]{40}$/i.test(value) && !seen.has(value.toLowerCase())){
+        seen.add(value.toLowerCase());
+
+        result.push({
+          name: `AceStream ${value.substring(0,8)}…`,
+          logo: "",
+          category: "AceStream",
+          url: `acestream://${value}`,
+          tvgId: ""
+        });
+      }
+    }
+  }
+
+  return result;
+}
+
+async function fetchWithTimeout(url, timeoutMs=15000){
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try{
+    const response = await fetch(url, {
+      method: "GET",
+      cache: "no-store",
+      signal: controller.signal,
+      headers: {
+        "Accept": "application/x-mpegURL, audio/mpegurl, text/plain, */*"
+      }
+    });
+
+    if(!response.ok){
+      throw new Error(`HTTP ${response.status} ${response.statusText}`);
+    }
+
+    const text = await response.text();
+
+    if(!text.trim()){
+      throw new Error("La lista M3U está vacía");
+    }
+
+    if(!isM3U(text)){
+      throw new Error("El archivo local no contiene una M3U reconocible");
+    }
+
+    return {
+      text,
+      source: url
+    };
+
+  }finally{
+    clearTimeout(timer);
+  }
+}
+
+function isM3U(text){
+  const sample = text.replace(/^\uFEFF/, "").trimStart();
+
+  return (
+    sample.startsWith("#EXTM3U") ||
+    sample.includes("#EXTINF") ||
+    /(?:^|\\n)(?:acestream:\/\/)?[a-f0-9]{40}(?:\\n|$)/i.test(sample)
+  );
+}
+
+function showLoadStatus(html, type="info"){
+  let box = document.getElementById("loadMessage");
+
+  if(!box){
+    box = document.createElement("div");
+    box.id = "loadMessage";
+    channelContainer.before(box);
+  }
+
+  const styles = {
+    info:  ["#eef4ff","#174ea6","#b7cdf8"],
+    ok:    ["#e8f5e9","#176b22","#a5d6a7"],
+    error: ["#ffe5e5","#b00000","#ffb3b3"]
+  };
+
+  const s = styles[type] || styles.info;
+
+  box.style.cssText = `
+    margin:10px auto;
+    max-width:95%;
+    padding:12px;
+    border-radius:6px;
+    text-align:center;
+    font-weight:bold;
+    background:${s[0]};
+    color:${s[1]};
+    border:1px solid ${s[2]};
+  `;
+
+  box.innerHTML = html;
+}
+
+async function loadChannels(){
+  channelContainer.innerHTML = "";
+  channels = [];
+  categories = [];
+
+  showLoadStatus("⏳ <strong>Buscando la lista de canales...</strong><br><small>Descargando la lista local actualizada por GitHub Actions.</small>", "info");
+
+  const errors = [];
+
+  for(const url of LISTA_URLS){
+    try{
+      console.log("🔎 Probando lista M3U:", url);
+
+      const text = await fetchWithTimeout(url);
+
+      console.log("📄 Respuesta recibida:", {
+        url,
+        bytes: text.length,
+        inicio: text.substring(0,150)
+      });
+
+      if(!isM3U(text)){
+        throw new Error(
+          `La respuesta no parece una M3U. Inicio recibido: ${text.substring(0,80)}`
+        );
+      }
+
+      const parsed = parseM3U(text);
+
+      if(!parsed.length){
+        throw new Error("La M3U se ha descargado pero no contiene canales reconocibles");
+      }
+
+      channels = parsed;
+
+      channels.forEach(c=>{
+        if(!categories.includes(c.category)){
+          categories.push(c.category);
+        }
+      });
+
+      console.log(`✅ Lista cargada correctamente desde ${url}`);
+      console.log(`📺 Canales encontrados: ${channels.length}`);
+
+      showLoadStatus(
+        `✅ <strong>${channels.length} canales cargados correctamente</strong><br>
+         <small>Fuente: ${new URL(url).hostname}</small>`,
+        "ok"
+      );
+
+      renderCategories();
+      renderChannels();
+
+      setTimeout(()=>{
+        const msg = document.getElementById("loadMessage");
+        if(msg) msg.remove();
+      }, 4000);
+
+      return;
+
+    }catch(err){
+      console.error("❌ Fallo del gateway:", url, err);
+
+      errors.push({
+        url,
+        error: err.name === "AbortError"
+          ? "Tiempo de espera agotado"
+          : (err.message || "Error desconocido")
+      });
+    }
+  }
+
+  const details = errors.map(e =>
+    `<div style="text-align:left;margin:6px 0">
+      <strong>${new URL(e.url).hostname}</strong>: ${e.error}
+    </div>`
+  ).join("");
+
+  showLoadStatus(`
+    ❌ <strong>No se ha podido leer la lista M3U desde ningún gateway.</strong>
+    <br><small>Que el navegador pueda descargar el archivo no garantiza que JavaScript pueda leerlo mediante fetch().</small>
+    <hr style="border:0;border-top:1px solid #ffb3b3">
+    ${details}
+    <br>
+    <button id="retryChannels" class="play-btn">🔄 Reintentar</button>
+  `, "error");
+
+  document.getElementById("retryChannels")?.addEventListener("click", loadChannels);
+}
+
+loadEPG();
+loadChannels();
+
+function renderCategories(){
+  categories.forEach(cat=>{
+    const btn = document.createElement('button');
+    btn.className='category-btn';
+    btn.textContent=cat;
+    btn.dataset.category=cat;
+
+    btn.onclick=()=>{
+      document.querySelectorAll('.category-btn')
+      .forEach(b=>b.classList.remove('active'));
+
+      btn.classList.add('active');
+      activeCategory=cat;
+      renderChannels();
+    };
+
+    categoryBar.appendChild(btn);
+  });
+}
+
+function renderChannels(){
+  channelContainer.innerHTML='';
+
+  const savedFavorites =
+    JSON.parse(localStorage.getItem('favorites')||'[]');
+
+  const searchTerm =
+    searchInput.value.toLowerCase();
+
+  const grouped = {};
+
+  channels.forEach(c=>{
+
+    const isFav = savedFavorites.includes(c.url);
+
+    const matchCategory =
+      activeCategory==='all' ||
+      c.category===activeCategory ||
+      (activeCategory==='favorites' && isFav);
+
+    const matchSearch =
+      c.name.toLowerCase().includes(searchTerm);
+
+    if(matchCategory && matchSearch){
+
+      const catKey =
+        activeCategory==='favorites'
+        ? '⭐ Favoritos'
+        : c.category;
+
+      if(!grouped[catKey]) grouped[catKey]=[];
+      grouped[catKey].push(c);
+    }
+
+  });
+
+  Object.keys(grouped).forEach(cat=>{
+
+    const h2 = document.createElement('h2');
+    h2.className='category-title';
+    h2.textContent=cat;
+    channelContainer.appendChild(h2);
+
+    const ul = document.createElement('ul');
+
+    grouped[cat].forEach(c=>{
+
+      const epg = getCurrentAndNextProgram(c.tvgId);
+
+      const li = document.createElement('li');
+
+      li.innerHTML=`
+        <div class="channel-info">
+
+          <img src="${c.logo || 'https://via.placeholder.com/160x80?text=Logo'}"
+          class="logo"
+          loading="lazy"
+          onerror="this.src='https://via.placeholder.com/160x80?text=Sin+Logo'">
+
+          <div>
+
+            <a href="${c.url}" target="_blank" rel="noopener noreferrer">
+              ${c.name}
+            </a>
+
+            <div class="epg-now">${epg.now}</div>
+            <div class="epg-next">${epg.next}</div>
+
+            <div class="progress-container">
+              <div class="progress-bar" style="width:${epg.progress}%"></div>
+            </div>
+
+          </div>
+
+        </div>
+
+        <div class="channel-actions">
+
+          <button class="play-btn">▶ Ver</button>
+
+          <button class="favorite-btn ${
+            savedFavorites.includes(c.url) ? 'active' : ''
+          }">★</button>
+
+        </div>
+      `;
+
+      li.querySelector('.play-btn').onclick=()=>{
+        if(c.url.startsWith('acestream://')){
+          window.location.href=c.url;
+        }else{
+          window.open(c.url,'_blank');
+        }
+      };
+
+      li.querySelector('.favorite-btn').onclick=(e)=>{
+
+        const btn = e.target;
+        btn.classList.toggle('active');
+
+        const favs =
+          JSON.parse(localStorage.getItem('favorites')||'[]');
+
+        const idx = favs.indexOf(c.url);
+
+        if(btn.classList.contains('active')){
+          if(idx===-1) favs.push(c.url);
+        }else{
+          if(idx>-1) favs.splice(idx,1);
+        }
+
+        localStorage.setItem('favorites',JSON.stringify(favs));
+      };
+
+      ul.appendChild(li);
+
+    });
+
+    channelContainer.appendChild(ul);
+
+  });
+
+}
+
+function getCurrentAndNextProgram(tvgId){
+
+  if(!epgData[tvgId]){
+    return {now:'Sin programación',next:'',progress:0};
+  }
+
+  const now = new Date();
+  const list = epgData[tvgId];
+
+  for(let i=0;i<list.length;i++){
+
+    const p = list[i];
+
+    const start = parseXMLTVDate(p.start);
+    const stop = parseXMLTVDate(p.stop);
+
+    if(now>=start && now<=stop){
+
+      const total = stop-start;
+      const passed = now-start;
+
+      return {
+        now:`📺 ${p.title}`,
+        next:list[i+1]?`⏭ ${list[i+1].title}`:'',
+        progress:Math.floor((passed/total)*100)
+      };
+
+    }
+  }
+
+  return {now:'Sin programación',next:'',progress:0};
+}
+
+function parseXMLTVDate(str){
+
+  if(!str) return new Date();
+
+  const year=str.substring(0,4);
+  const month=str.substring(4,6);
+  const day=str.substring(6,8);
+  const hour=str.substring(8,10);
+  const min=str.substring(10,12);
+
+  return new Date(`${year}-${month}-${day}T${hour}:${min}:00`);
+}
+
+searchInput.addEventListener('input',renderChannels);
+setInterval(renderChannels,60000);
+
+</script>
+
+</body>
+</html>
