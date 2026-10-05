@@ -16,45 +16,98 @@ jobs:
       - name: Descargar repositorio
         uses: actions/checkout@v4
 
-      - name: Descargar M3U
+      - name: Descargar y normalizar M3U
         shell: bash
         run: |
           set -euo pipefail
 
-          URL="https://k51qzi5uqu5dh5qej4b9wlcr5i6vhc7rcfkekhrxqek5c9lk6gdaiik820fecs.ipns.inbrowser.link/hashes_acestream.m3u"
+          URLS=(
+            "https://k51qzi5uqu5dh5qej4b9wlcr5i6vhc7rcfkekhrxqek5c9lk6gdaiik820fecs.ipns.inbrowser.link/hashes_acestream.m3u"
+            "https://ipfs.io/ipns/k51qzi5uqu5dh5qej4b9wlcr5i6vhc7rcfkekhrxqek5c9lk6gdaiik820fecs/hashes_acestream.m3u"
+          )
 
-          echo "Descargando: $URL"
+          TMP="$(mktemp)"
+          OK=0
 
-          curl \
-            --fail \
-            --location \
-            --silent \
-            --show-error \
-            --retry 5 \
-            --retry-delay 5 \
-            --connect-timeout 20 \
-            --max-time 120 \
-            -A "Mozilla/5.0 GitHub-Actions AceStream" \
-            "$URL" \
-            -o hashes_acestream.m3u
+          for URL in "${URLS[@]}"; do
+            echo "========================================"
+            echo "Intentando: $URL"
+            echo "========================================"
 
-          test -s hashes_acestream.m3u
+            if curl \
+              --fail \
+              --location \
+              --silent \
+              --show-error \
+              --retry 5 \
+              --retry-delay 5 \
+              --connect-timeout 20 \
+              --max-time 120 \
+              -A "Mozilla/5.0 GitHub-Actions AceStream" \
+              "$URL" \
+              -o "$TMP"; then
 
-          echo "Tamaño:"
+              SIZE=$(wc -c < "$TMP")
+              echo "Tamaño descargado: ${SIZE} bytes"
+              echo "Primeras 30 líneas recibidas:"
+              sed -n '1,30p' "$TMP" || true
+              echo "----------------------------------------"
+
+              # 1) M3U estándar: conservarla tal cual.
+              if grep -Eiq '#EXTM3U|#EXTINF' "$TMP"; then
+                echo "Detectada lista M3U estándar."
+                cp "$TMP" hashes_acestream.m3u
+                OK=1
+                break
+              fi
+
+              # 2) Lista simple: extraer cualquier hash AceStream de 40 caracteres.
+              HASHES=$(grep -Eio '[A-Fa-f0-9]{40}' "$TMP" | tr '[:upper:]' '[:lower:]' | awk '!seen[$0]++') || true
+
+              if [ -n "$HASHES" ]; then
+                COUNT=$(printf '%s\n' "$HASHES" | sed '/^$/d' | wc -l)
+                echo "Detectados $COUNT hashes AceStream."
+
+                {
+                  echo '#EXTM3U'
+                  echo '# Lista normalizada automáticamente por GitHub Actions'
+                  printf '%s\n' "$HASHES" | sed '/^$/d' | sed 's#^#acestream://#'
+                } > hashes_acestream.m3u
+
+                OK=1
+                break
+              fi
+
+              echo "La respuesta no contiene una M3U reconocible ni hashes de 40 caracteres."
+            else
+              echo "Falló la descarga desde este origen."
+            fi
+          done
+
+          rm -f "$TMP"
+
+          if [ "$OK" -ne 1 ]; then
+            echo ""
+            echo "ERROR: no se pudo obtener una lista AceStream válida desde ningún origen."
+            exit 1
+          fi
+
+          echo "========================================"
+          echo "Resultado final:"
+          echo "========================================"
           wc -c hashes_acestream.m3u
+          echo "Primeras líneas de hashes_acestream.m3u:"
+          sed -n '1,20p' hashes_acestream.m3u
 
-          echo "Primeras líneas:"
-          head -n 10 hashes_acestream.m3u
-
-      - name: Validar M3U
+      - name: Validar resultado
         shell: bash
         run: |
           set -euo pipefail
 
-          if grep -qE '#EXTM3U|#EXTINF|^[[:space:]]*(acestream://)?[A-Fa-f0-9]{40}[[:space:]]*$' hashes_acestream.m3u; then
-            echo "M3U válida."
+          if grep -Eiq '#EXTM3U|#EXTINF|^acestream://[A-Fa-f0-9]{40}[[:space:]]*$|^[A-Fa-f0-9]{40}[[:space:]]*$' hashes_acestream.m3u; then
+            echo "Lista AceStream válida."
           else
-            echo "ERROR: la descarga no parece una lista M3U/AceStream."
+            echo "ERROR: el archivo final no parece una lista AceStream válida."
             exit 1
           fi
 
