@@ -242,9 +242,12 @@ SUPERVECTAR AceStream DEPORTES ELCANO
 
 <div id="channelContainer"></div>
 
+<script src="https://unpkg.com/@helia/verified-fetch@8.1.2/dist/index.min.js"></script>
+
 <script>
 
 const LISTA_URLS = [
+  "ipns://k51qzi5uqu5dh5qej4b9wlcr5i6vhc7rcfkekhrxqek5c9lk6gdaiik820fecs/hashes_acestream.m3u",
   "./hashes_acestream.m3u"
 ];
 
@@ -418,22 +421,41 @@ function parseM3U(text){
   return result;
 }
 
-async function fetchWithTimeout(url, timeoutMs=15000){
+async function fetchWithTimeout(url, timeoutMs=30000){
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try{
-    const response = await fetch(url, {
-      method: "GET",
-      cache: "no-store",
-      signal: controller.signal,
-      headers: {
-        "Accept": "application/x-mpegURL, audio/mpegurl, text/plain, */*"
+    let response;
+
+    // IPNS/IPFS: usar verified-fetch, no fetch() contra un gateway HTTP.
+    // Así el navegador recupera el contenido desde IPFS y verifica los bytes.
+    if(url.startsWith("ipns://") || url.startsWith("ipfs://")){
+      if(!window.HeliaVerifiedFetch ||
+         typeof window.HeliaVerifiedFetch.verifiedFetch !== "function"){
+        throw new Error("No se ha podido cargar @helia/verified-fetch");
       }
-    });
+
+      response = await window.HeliaVerifiedFetch.verifiedFetch(url, {
+        signal: controller.signal,
+        headers: {
+          "accept": "text/plain, application/x-mpegURL, audio/mpegurl, */*"
+        }
+      });
+    }else{
+      // Fallback local para hashes_acestream.m3u si existe en GitHub Pages.
+      response = await fetch(url, {
+        method: "GET",
+        cache: "no-store",
+        signal: controller.signal,
+        headers: {
+          "Accept": "application/x-mpegURL, audio/mpegurl, text/plain, */*"
+        }
+      });
+    }
 
     if(!response.ok){
-      throw new Error(`HTTP ${response.status} ${response.statusText}`);
+      throw new Error(`HTTP ${response.status} ${response.statusText || ""}`.trim());
     }
 
     const text = await response.text();
@@ -442,15 +464,13 @@ async function fetchWithTimeout(url, timeoutMs=15000){
       throw new Error("La lista M3U está vacía");
     }
 
-    if(!isM3U(text)){
-      throw new Error("El archivo local no contiene una M3U reconocible");
+    return text;
+
+  }catch(err){
+    if(err?.name === "AbortError"){
+      throw new Error("Tiempo de espera agotado al obtener la lista");
     }
-
-    return {
-      text,
-      source: url
-    };
-
+    throw err;
   }finally{
     clearTimeout(timer);
   }
@@ -462,7 +482,8 @@ function isM3U(text){
   return (
     sample.startsWith("#EXTM3U") ||
     sample.includes("#EXTINF") ||
-    /(?:^|\\n)(?:acestream:\/\/)?[a-f0-9]{40}(?:\\n|$)/i.test(sample)
+    /(?:^|\n)\s*(?:acestream:\/\/)?[a-f0-9]{40}\s*(?:\n|$)/i.test(sample) ||
+    /acestream:\/\/[a-f0-9]{40}/i.test(sample)
   );
 }
 
@@ -503,13 +524,16 @@ async function loadChannels(){
   channels = [];
   categories = [];
 
-  showLoadStatus("⏳ <strong>Buscando la lista de canales...</strong><br><small>Descargando la lista local actualizada por GitHub Actions.</small>", "info");
+  showLoadStatus("⏳ <strong>Buscando la lista de canales...</strong><br><small>Obteniendo la lista directamente desde IPNS/IPFS con verificación.</small>", "info");
 
   const errors = [];
 
   for(const url of LISTA_URLS){
     try{
       console.log("🔎 Probando lista M3U:", url);
+      if(url.startsWith("ipns://")){
+        console.log("🌐 Usando @helia/verified-fetch para resolver IPNS directamente en el navegador.");
+      }
 
       const text = await fetchWithTimeout(url);
 
@@ -544,7 +568,7 @@ async function loadChannels(){
 
       showLoadStatus(
         `✅ <strong>${channels.length} canales cargados correctamente</strong><br>
-         <small>Fuente: ${new URL(url).hostname}</small>`,
+         <small>Fuente: ${url.startsWith("ipns://") ? "IPNS/IPFS verificado" : new URL(url).hostname}</small>`,
         "ok"
       );
 
@@ -572,7 +596,7 @@ async function loadChannels(){
 
   const details = errors.map(e =>
     `<div style="text-align:left;margin:6px 0">
-      <strong>${new URL(e.url).hostname}</strong>: ${e.error}
+      <strong>${e.url.startsWith("ipns://") ? "IPNS/IPFS" : new URL(e.url).hostname}</strong>: ${e.error}
     </div>`
   ).join("");
 
